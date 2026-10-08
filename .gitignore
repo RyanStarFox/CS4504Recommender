@@ -16,11 +16,12 @@ env/
 .mypy_cache/
 .ipynb_checkpoints/
 
-# Training outputs
+# Training outputs. Feature tensors under data/ are small enough for GitHub.
 movie_features.pt
 *.pt
 *.pth
 *.ckpt
+!data/*.pt
 checkpoints/
 runs/
 logs/
