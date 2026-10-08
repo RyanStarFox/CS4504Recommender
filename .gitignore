@@ -1,0 +1,35 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+.env
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# Training outputs
+movie_features.pt
+*.pt
+*.pth
+*.ckpt
+checkpoints/
+runs/
+logs/
+wandb/
+
+# Local GPT-2 weights (~523MB). GitHub rejects files over 100MB.
+# Tokenizer and config in gpt2_model/ are still tracked.
+gpt2_model/model.safetensors
+
+# IDE
+.idea/
+.vscode/
