@@ -10,12 +10,12 @@
 
 | 模型 | 权重 | 用在哪 |
 | --- | --- | --- |
-| GPT-2 | 仓库里的 `gpt2_model/`，隐藏维度 768 | 第 3 行、第 5a 行。只做冻结特征，不微调 |
+| GPT-2 | 本机的 `models/gpt2/`（整个 `models/` 忽略入 Git），隐藏维度 768 | 第 3 行、第 5a 行。只做冻结特征，不微调 |
 | Qwen3.5-0.8B | `Qwen/Qwen3.5-0.8B`，隐藏维度 1024 | 第 5b、6 行的冻结文本特征，第 7–9 行的 LoRA，以及最后的演示 |
 
 不把 GPT-2 全部换掉。第 3 行是课程给定的 NCF + 冻结 GPT-2，划分仍用随机 8:1:1，只和原作业对齐，不和时间切分上的结果比高低。第 5a 行和第 5b 行是同一套 SASRec、同一套时间切分，只换编码器。第 6–9 行和演示都用 Qwen3.5-0.8B，不再用 GPT-2 重训排序。
 
-Qwen3.5-0.8B 默认是非思考模式，排序时不要打开思考。只使用文本分支，不加载视觉编码器。语言模型特征维度从实际加载模型的文本配置动态读取（例如 `config.text_config.hidden_size` 或文本模型的 `config.hidden_size`），并核对输出张量；推荐模型维度单独配置为 `rec_hidden_size`，由投影层连接两者。现有 `transformers==4.40.2` 加载不了它，各台机器升到同一套能加载 Qwen3.5 的版本。
+Qwen3.5-0.8B 默认是非思考模式，排序时不要打开思考。只使用文本分支，不加载视觉编码器。语言模型特征维度从实际加载模型的文本配置动态读取（例如 `config.text_config.hidden_size` 或文本模型的 `config.hidden_size`），并核对输出张量；推荐模型维度单独配置为 `rec_hidden_size`，由投影层连接两者。课程原始 `transformers==4.40.2` 加载不了它，全组按 `requirements.txt` 统一到 Python 3.10、PyTorch 2.6.0、Transformers 5.8.0；CUDA wheel 可带平台后缀。
 
 基础流程分别批量编码约 4000 部电影，存成 `.pt` 后按生成配置复用，不再重复编码；约 6000 个用户的属性文本仅在可选消融启用时生成。费时间的是第 7–9 行，只训 Qwen3.5 的 LoRA。DPO 和 GRPO 要同时放当前模型和一份冻结的参考模型。
 
@@ -242,4 +242,4 @@ C 的数据读取只认 `sequences.json` 和 `candidates.json` 的路径。`mock
 
 GitHub 单文件上限是 100MB。这几份特征都是 float32：GPT-2 电影特征约 12MB，Qwen3.5 电影特征约 16MB，用户特征约 24MB。JSON 更小。都不用压缩，也不用 Git LFS。float32 特征几乎压不小，打成 zip 仍然要占仓库空间。
 
-Git LFS 的免费额度大约是 1GB 存储和每月 1GB 流量，每次克隆都扣流量。这些小文件不值得占用额度。真正超限的是 `gpt2_model/model.safetensors`（约 523MB），它继续留在本机，不上传。
+Git LFS 的免费额度大约是 1GB 存储和每月 1GB 流量，每次克隆都扣流量。这些小文件不值得占用额度。真正超限的是 `models/gpt2/model.safetensors`（约 523MB），它继续留在本机，不上传。

@@ -1,0 +1,62 @@
+{
+  "format_version": 1,
+  "encoder": "qwen",
+  "model_id": "Qwen/Qwen3.5-0.8B",
+  "model_path": "models/Qwen3.5-0.8B",
+  "revision": "2fc06364715b967f1860aea9cf38778875588b17",
+  "model_files_sha256": {
+    "chat_template.jinja": "273d8e0e683b885071fb17e08d71e5f2a5ddfb5309756181681de4f5a1822d80",
+    "config.json": "b90b86f35c8e6925ef74ee04d0e758f0a845c83a42089ad82bbaa948de9b4204",
+    "merges.txt": "a9d356d7bdf1ef4949e3e748e95b8e10ad9d4e2e838eddc38a0a7b6b94d1db8d",
+    "model.safetensors-00001-of-00001.safetensors": "04b1c301231dd422b8860db31311ab2721511346a32cb1e079c4c4e5f1fe4696",
+    "model.safetensors.index.json": "d8a08838a613b025eb7952ed9db11696213e57e76a375661ef5c12f9dd5dcf4e",
+    "preprocessor_config.json": "27225450ac9c6529872ee1924fcb0962ff5634834f817040f444118116f4e516",
+    "revision.json": "6c7f0b189d43907996308ad9e6db4efbc9e03a0d172dac155f220e68083968ec",
+    "tokenizer.json": "5f9e4d4901a92b997e463c1f46055088b6cca5ca61a6522d1b9f64c4bb81cb42",
+    "tokenizer_config.json": "49e2b6e395f959f077f1e992b338919c0d4a9732fc6e613995e06557f843500c",
+    "video_preprocessor_config.json": "7768af27c1fafa9cc9011c1dc20067e03f8915e03b63504550e11d5066986d13",
+    "vocab.json": "ce99b4cb2983d118806ce0a8b777a35b093e2000a503ebde25853284c9dfa003"
+  },
+  "data_path": "ml-1m/movies.dat",
+  "data_sha256": "0140fc2356357c1a851d0f52e893a1e4d3696df632c4141cea8d5bc3d621f0b9",
+  "text_template": "Title: {title}. Genres: {genres}.",
+  "pooling": "last_hidden_masked_mean_float32",
+  "padding_side": "right",
+  "max_length": 32,
+  "tokenizer_source": "AutoTokenizer",
+  "batch_size": 8,
+  "seed": 42,
+  "threads": 4,
+  "device": "cuda",
+  "model_dtype": "torch.bfloat16",
+  "storage_dtype": "torch.float32",
+  "use_user_text": false,
+  "use_alignment": false,
+  "use_cache": false,
+  "attention_implementation": "eager",
+  "deterministic_algorithms": true,
+  "python": "3.10.20",
+  "torch": "2.6.0+cu124",
+  "transformers": "5.8.0",
+  "hidden_size": 1024,
+  "smoke_test": {
+    "passed": true,
+    "shape": [
+      3,
+      1024
+    ],
+    "finite": true,
+    "frozen": true,
+    "repeat_max_abs_diff": 0.0,
+    "padding_max_abs_diff": 0.09140610694885254,
+    "padding_relative_l2_error": 0.008797924034297466,
+    "padding_relative_l2_tolerance": 0.03,
+    "visual_encoder_loaded": false
+  },
+  "movie_count": 3883,
+  "shape": [
+    3953,
+    1024
+  ],
+  "tensor_sha256": "d4b7391171bf1c19188c34a3a8ccb6f476efc05bf5435f88eac672d72c47e93d"
+}

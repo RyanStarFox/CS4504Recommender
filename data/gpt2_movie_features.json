@@ -1,0 +1,55 @@
+{
+  "format_version": 1,
+  "encoder": "gpt2",
+  "model_id": "gpt2",
+  "model_path": "models/gpt2",
+  "revision": null,
+  "model_files_sha256": {
+    "config.json": "0daed7749b4f02b8f76240d5444551d7b08712dab4d0adb8239c56ba823bb7b4",
+    "merges.txt": "1ce1664773c50f3e0cc8842619a93edc4624525b728b188a9e0be33b7726adc5",
+    "model.safetensors": "248dfc3911869ec493c76e65bf2fcf7f615828b0254c12b473182f0f81d3a707",
+    "vocab.json": "196139668be63f3b5d6574427317ae82f612a97c5d1cdaf36ed2256dbf636783"
+  },
+  "data_path": "ml-1m/movies.dat",
+  "data_sha256": "0140fc2356357c1a851d0f52e893a1e4d3696df632c4141cea8d5bc3d621f0b9",
+  "text_template": "Title: {title}. Genres: {genres}.",
+  "pooling": "last_hidden_masked_mean_float32",
+  "padding_side": "right",
+  "max_length": 32,
+  "tokenizer_source": "vocab.json+merges.txt",
+  "batch_size": 16,
+  "seed": 42,
+  "threads": 4,
+  "device": "cuda",
+  "model_dtype": "torch.bfloat16",
+  "storage_dtype": "torch.float32",
+  "use_user_text": false,
+  "use_alignment": false,
+  "use_cache": false,
+  "attention_implementation": "eager",
+  "deterministic_algorithms": true,
+  "python": "3.10.20",
+  "torch": "2.6.0+cu124",
+  "transformers": "5.8.0",
+  "hidden_size": 768,
+  "smoke_test": {
+    "passed": true,
+    "shape": [
+      3,
+      768
+    ],
+    "finite": true,
+    "frozen": true,
+    "repeat_max_abs_diff": 0.0,
+    "padding_max_abs_diff": 0.40073394775390625,
+    "padding_relative_l2_error": 0.0030697202309966087,
+    "padding_relative_l2_tolerance": 0.03,
+    "visual_encoder_loaded": false
+  },
+  "movie_count": 3883,
+  "shape": [
+    3953,
+    768
+  ],
+  "tensor_sha256": "4ddce081653c10bc577e5785f2138467e123115152b61c354e42c74c6e214514"
+}
