@@ -56,10 +56,9 @@ def extract_movie_features(data_path, output_path, batch_size=32, model_path=Non
             # hidden 的形状为 [B, L, 768]：批大小、词元数、隐藏维度。
             hidden = model(**inputs).last_hidden_state
 
-            # TODO 1：对最后一层隐藏状态进行掩码平均池化，得到 [B, 768]。
-            # 提示：attention_mask 中真实词元为 1，padding 为 0；先扩充
-            # 最后一维，再计算加权和并除以真实词元数。
-            raise NotImplementedError("请完成 GPT-2 掩码平均池化")
+            # 对最后一层隐藏状态进行掩码平均池化，得到 [B, 768]。
+            mask = inputs["attention_mask"].unsqueeze(-1)
+            pooled = (hidden * mask).sum(dim=1) / mask.sum(dim=1)
         encoded_batches.append(pooled.cpu())
 
     encoded = torch.cat(encoded_batches)  # [3883, 768]

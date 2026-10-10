@@ -15,9 +15,9 @@
 
 不把 GPT-2 全部换掉。第 3 行是课程给定的 NCF + 冻结 GPT-2，划分仍用随机 8:1:1，只和原作业对齐，不和时间切分上的结果比高低。第 5a 行和第 5b 行是同一套 SASRec、同一套时间切分，只换编码器。第 6–9 行和演示都用 Qwen3.5-0.8B，不再用 GPT-2 重训排序。
 
-Qwen3.5-0.8B 默认是非思考模式，排序时不要打开思考。只使用文本分支，不加载视觉编码器。隐藏维度以 `config.hidden_size` 为准。现有 `transformers==4.40.2` 加载不了它，各台机器升到同一套能加载 Qwen3.5 的版本。
+Qwen3.5-0.8B 默认是非思考模式，排序时不要打开思考。只使用文本分支，不加载视觉编码器。语言模型特征维度从实际加载模型的文本配置动态读取（例如 `config.text_config.hidden_size` 或文本模型的 `config.hidden_size`），并核对输出张量；推荐模型维度单独配置为 `rec_hidden_size`，由投影层连接两者。现有 `transformers==4.40.2` 加载不了它，各台机器升到同一套能加载 Qwen3.5 的版本。
 
-抽两套特征都是各前向一次，大约 4000 部电影加 6000 个用户，存成 `.pt` 之后不再重复编码。费时间的是第 7–9 行，只训 Qwen3.5 的 LoRA。DPO 和 GRPO 要同时放当前模型和一份冻结的参考模型。
+基础流程分别批量编码约 4000 部电影，存成 `.pt` 后按生成配置复用，不再重复编码；约 6000 个用户的属性文本仅在可选消融启用时生成。费时间的是第 7–9 行，只训 Qwen3.5 的 LoRA。DPO 和 GRPO 要同时放当前模型和一份冻结的参考模型。
 
 ## 打底运行方式
 
@@ -31,7 +31,7 @@ Qwen3.5-0.8B 默认是非思考模式，排序时不要打开思考。只使用�
 | GRPO 的一组排序 | llama.cpp 采样一次 | 从合并后的冻结 SFT 模型采样，存成文件。PyTorch 只读这些样本算 NDCG 和损失，训练中不再调用模型生成 |
 | 第 7–9 行的测试指标、Agent 演示 | llama.cpp | 报告里的生成结果都从这里出。LoRA 先合并进基座，再转成 GGUF。需要新版 llama.cpp，旧版没有 Qwen3.5 的算子 |
 
-`PYTORCH_ENABLE_MPS_FALLBACK=1` 在 CUDA 上没有效果，各台机器都照样设置。设备优先级仍是 `cuda > mps > cpu`。回退只保证 MPS 能跑完，DeltaNet 若大量落到 CPU，Mac 上的微调会变慢；全量 SFT、DPO、GRPO 优先放在 CUDA 上。
+`PYTORCH_ENABLE_MPS_FALLBACK=1` 在 CUDA 上没有效果，各台机器都照样设置。设备优先级仍是 `cuda > mps > cpu`。回退不能保证所有算子兼容，须先做小样本验证；DeltaNet 若大量落到 CPU，Mac 上的微调会变慢；全量 SFT、DPO、GRPO 优先放在 CUDA 上。
 
 ## 设备
 
@@ -54,7 +54,7 @@ def get_dtype(device):
     return torch.float32
 ```
 
-模型用这个 dtype 加载，再 `.to(device)`。不用 `device_map="auto"`，也不按机器改模型结构。存到磁盘上的 `movie_features.pt` 和 `user_features.pt` 一律是 `float32`，后面的 SASRec 不跟着语言模型的半精度走。batch size 可以按设备调小，数据格式和指标不变。
+语言模型用这个 dtype 加载，再 `.to(device)`；MF、NCF、SASRec 及融合模块默认使用 float32，混合精度训练另行显式配置。不用 `device_map="auto"`，也不按机器改模型结构。存到磁盘上的 `movie_features.pt` 和 `user_features.pt` 一律是 `float32`，后面的 SASRec 不跟着语言模型的半精度走。batch size 可以按设备调小，数据格式和指标不变。
 
 选择顺序固定为 `cuda > mps > cpu`。有 NVIDIA GPU 时用 CUDA；没有 CUDA、但是 Apple Silicon 时用 MPS；两者都没有时用 CPU。三套后端跑同一套模型和数据，只允许 batch size 和 dtype 不同。
 
@@ -65,11 +65,11 @@ def get_dtype(device):
 | 成员 | 负责 | 写这些文件 | 不改这些文件 |
 | --- | --- | --- | --- |
 | A 数据、经典基线、报告 | 时间切分；流行度、BPR-MF、课程 NCF；HR@10 / NDCG@10；用流行度先交一份假候选。后半段把四人的幻灯片收成一份并主讲 | `split.py`、`metrics.py`、`mf.py`、`run_baselines.py`，以及课程填空所需的 `dataloader.py`、`recommender.py`；最终 `report.pptx` | `sasrec.py`、`features.py`、`ranking/`、`agent_demo.py` |
-| B 表示 | 冻结 GPT-2 与冻结 Qwen3.5-0.8B 各编码一套特征；门控注入；只在 Qwen3.5 特征上做对比对齐；`device.py` | `features.py`、`fusion.py`、`device.py` | `split.py`、`sasrec.py`、`ranking/`、`agent_demo.py` |
+| B 表示 | 冻结 GPT-2 与 Qwen3.5 的电影特征；门控注入；Qwen3.5 对比对齐；用户属性文本作为独立可选消融；`device.py` | `features.py`、`fusion.py`、`device.py`、课程 `gpt2.py` | `split.py`、`sasrec.py`、`ranking/`、`agent_demo.py` |
 | C 排序 | SFT、DPO、GRPO-based ranking optimization；合并 LoRA 并交给 llama.cpp 出第 7–9 行的测试结果 | `ranking/` | `split.py`、`sasrec.py`、`features.py`、`agent_demo.py` |
 | D 序列召回与演示 | SASRec；导出正式 Top-10；报告最后的 Agent 演示 | `sasrec.py`、`run_sasrec.py`、`agent_demo.py` | `features.py`、`ranking/`、`dataloader.py`、`recommender.py` |
 
-课程代码里的 4 处 TODO：`dataloader.py` 和 `recommender.py` 由 A 补，`gpt2.py` 里的池化由 B 补，只服务于第 3 行基线。`trainer.py` 的评测函数保持原样，只给课程 NCF 那一行使用。四个人加载模型时都从 `device.py` 取设备和 dtype。
+课程代码里的 4 处 TODO 可复用本地 `master` 已完成的对应实现：`dataloader.py` 和 `recommender.py` 由 A 移植，`gpt2.py` 的池化由 B 移植；只按文件职责恢复，不合并整个旧分支。这些课程填空服务于第 3 行基线，SASRec 的门控和对齐另外实现。`trainer.py` 的评测函数保持原样，只给课程 NCF 那一行使用。四个人从 `device.py` 取设备，语言模型另取加载 dtype；推荐模型默认 float32。
 
 ## 共享文件格式
 
@@ -94,7 +94,8 @@ def get_dtype(device):
 `torch.float32`，维度用各自模型的 `hidden_size`，不写死。电影句子用标题和类型，用户句子用性别、年龄、职业。文件分成两套：
 
 - `data/gpt2_movie_features.pt`：GPT-2，`[电影数, 768]`，给第 3 行和第 5a 行
-- `data/qwen_movie_features.pt`、`data/qwen_user_features.pt`：Qwen3.5-0.8B，给第 5b 行和第 6 行
+- `data/qwen_movie_features.pt`：Qwen3.5-0.8B，给第 5b、6 行
+- `data/qwen_user_features.pt`：独立可选的用户属性特征，仅在 `use_user_text=true` 的消融中使用；默认不生成、不加载。年龄、职业代码须映射为可读文字，不能把编号视为偏好语义。
 
 GPT-2 不编码用户画像。第 3 行的课程模型只使用电影特征。
 
@@ -124,8 +125,9 @@ SASRec 对验证、测试各给 10 部电影。列表顺序就是召回顺序。
 | 3 | 补全课程的 4 处 TODO。NCF 拼接用户 ID、电影 ID、GPT-2 电影特征，随机 8:1:1 | 冻结 GPT-2，本地权重 | A 训练，B 提供 `gpt2_movie_features.pt` |
 | 4 | 按时间切分，SASRec 只用电影 ID 预测下一部，导出验证和测试的 Top-10 | 无 | D |
 | 5a | 同一套 SASRec，把冻结 GPT-2 的电影向量用门控加进 ID 向量 | 冻结 GPT-2 | D 的接口 + B 的特征 |
-| 5b | 和 5a 完全相同，只把特征换成 Qwen3.5 的电影向量和用户向量 | 冻结 Qwen3.5-0.8B | B 的特征，D 的 SASRec |
-| 6 | 在 5b 上加对比损失，让同一部电影的 ID 向量和 Qwen3.5 向量接近。Qwen3.5 仍然冻结 | 冻结 Qwen3.5-0.8B | B |
+| 5b | 和 5a 保持相同输入与融合结构，只换成 Qwen3.5 电影向量，不加入用户文本 | 冻结 Qwen3.5-0.8B | B 的特征，D 的 SASRec |
+| 5u（可选） | 在 5b 上单独打开用户属性文本，其他配置保持一致；与 5b 比较用户文本收益 | 冻结 Qwen3.5-0.8B | B 与 D |
+| 6 | 在 5b（无用户文本）上加对比损失，让同一部电影的 ID 向量和 Qwen3.5 向量接近；只改变对齐开关。Qwen3.5 仍然冻结 | 冻结 Qwen3.5-0.8B | B |
 | 7 | 用「看过 A、B、C，给 Top-10 编号排序」做监督微调，重排第 4 行的 Top-10 | Qwen3.5-0.8B + LoRA | C |
 | 8 | 同一提示上做 DPO。chosen 是 ground-truth next movie，rejected 是同一个 Top-10 里的另一部 | 第 7 行的 LoRA 继续训，另留一份冻结参考模型 | C |
 | 9 | GRPO-based ranking optimization。从冻结的 SFT 模型采样一组排序，奖励是相对 ground-truth 的 NDCG | 同一套 Qwen3.5-0.8B + LoRA | C |
@@ -157,7 +159,7 @@ GRPO 使用同一批固定的 Top-10。一组排序由 llama.cpp 从合并后的
 第 1 天（同时）
   A  写 split.py，交出 data/sequences.json 和 metrics.py
   A  另写一份 data/mock_candidates.json（流行度 Top-10），格式与正式候选相同
-  B  写 device.py，并用 movies.dat、users.dat 抽 GPT-2 和 Qwen3.5 特征，不需要划分结果
+  B  复用课程池化，写 device.py；先小批量验证，再用 movies.dat 抽 GPT-2 和 Qwen3.5 电影特征，不需要划分结果。users.dat 特征留到可选消融
   D  用 A 的序列写 SASRec；序列未到之前，先把 sasrec.py 的接口和训练循环写好
   C  用 mock 候选把 SFT、DPO、GRPO 的训练循环跑通
 
@@ -181,6 +183,21 @@ user_features: torch.Tensor | None = None   # [user_num, hidden]
 ```
 
 为 `None` 时就是纯 ID 的第 4 行，D 不用等 B。B 完成后把张量传进去，得到第 5、6 行。第 6 行的对比损失写在 B 的 `fusion.py` 里，由 D 的训练循环调用。
+
+### B 与 D 的最小接口约定
+
+- `use_user_text=false`、`use_alignment=false` 为默认值；5a、5b 都只用电影文本，6 只增加对齐，5u 只增加用户文本。不因特征文件存在就自动启用模块。
+- `features.py` 负责冻结编码与缓存，记录模型标识、文本模板、池化方式、截断长度和真实维度；缓存统一 float32，原始 ID 对齐，0 和空缺行保持零值。
+- `fusion.py` 提供可训练电影投影与门控，D 将其注册为 SASRec 子模块并纳入优化器、检查点。双方明确历史输入与候选打分是否使用同一融合表示，以及可选用户向量的注入位置。
+- 对齐损失接收同一组去重有效电影 ID 对应的原始 ID 表示与投影文本表示；排除 padding、空缺 ID，温度与损失权重显式配置。语言模型和缓存不更新，投影、门控及 ID 表示按目标反向传播。
+- 先以随机特征验证形状、有效 ID、有限损失、梯度和开关行为，再接真实特征；正式对比固定划分、种子、训练预算和选模规则，仅改变被比较因素。
+
+### A/C/D 仍需确认的事项（不阻塞 B 的冻结特征工作）
+
+- 时间切分需固定相同 timestamp 的排序规则、验证/测试使用的历史及历史屏蔽规则；所有方法共用同一份划分。
+- Top-10 内重排且仍输出 10 项，HR@10 不变；若希望改善命中率，需另行统一更大的候选数和候选召回率评价。
+- 重排训练样本应来自训练序列内部的历史前缀与下一次交互，验证/测试目标不参与训练；现有候选格式还需另定义训练输入。
+- SFT 完整排序与 DPO 单电影回答的输出任务需统一；固定 SFT 样本的奖励优化须明确采样概率与更新方式，不直接等同于标准在线 GRPO。
 
 C 的数据读取只认 `sequences.json` 和 `candidates.json` 的路径。`mock_candidates.json` 与正式文件字段相同，所以调试阶段不用改训练代码。
 
