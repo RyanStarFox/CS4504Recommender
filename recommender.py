@@ -45,7 +45,7 @@ class HybridRecommender(nn.Module):
         # TODO 3：拼接三个向量，并通过 self.mlp 得到每个用户—电影对的分数。
         # 提示：沿最后一维拼接后形状为 [B, 96]；MLP 输出 [B, 1]，
         # 需要移除最后一个长度为 1 的维度。
-        raise NotImplementedError("请完成特征融合与推荐分数计算")
+        return self.mlp(torch.cat((user_vec, item_vec, text_vec), dim=-1)).squeeze(-1)
 
     def forward(self, batch_data):
         """同一套 score 同时计算正样本和负样本，保证训练与推荐逻辑一致。"""
@@ -59,7 +59,7 @@ class HybridRecommender(nn.Module):
         # TODO 4：实现 BPR 损失。
         # 提示：先计算 positive_scores - negative_scores，再依次使用
         # sigmoid、log、mean；最前面需要负号，可加入 1e-8 保持数值稳定。
-        raise NotImplementedError("请完成 BPR 损失")
+        return -torch.nn.functional.logsigmoid(positive_scores - negative_scores).mean()
 
     @torch.no_grad()
     def full_sort_predict(self, user_ids):

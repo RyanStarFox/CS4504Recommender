@@ -1,0 +1,4 @@
+model,hr10,ndcg10,split
+popularity,0.03692053,0.01803267,temporal
+bpr_mf,0.06721854,0.03370051,temporal
+ncf_gpt2,0.52500839,0.12534397,random

@@ -38,7 +38,13 @@ class TrainDataLoader:
             # TODO 2：从 all_items 随机选择一部当前用户未交互过的电影。
             # 提示：使用 while 循环反复采样 candidate，并检查它是否存在于
             # self.history_items[row.user_id]；找到后写入 negatives[index]。
-            raise NotImplementedError("请完成训练负样本采样")
+            history = self.history_items[row.user_id]
+            if len(history) >= len(self.all_items):
+                raise ValueError(f"User {row.user_id} has no unseen training movie")
+            candidate = self.all_items[np.random.randint(len(self.all_items))]
+            while candidate in history:
+                candidate = self.all_items[np.random.randint(len(self.all_items))]
+            negatives[index] = candidate
         return negatives
 
     def __len__(self):

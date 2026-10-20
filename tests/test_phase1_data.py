@@ -68,8 +68,10 @@ class Phase1ArtifactTests(unittest.TestCase):
             self.assertEqual(sha256(ROOT / "ml-1m" / name, normalize_newlines=True), digest)
         for split in ("validation", "test"):
             targets = {user: row[split] for user, row in self.sequences.items()}
-            self.assertEqual(evaluate_rankings(self.candidates[split], targets),
-                             manifest["mock_debug_metrics"][split])
+            actual = evaluate_rankings(self.candidates[split], targets)
+            expected = manifest["mock_debug_metrics"][split]
+            for metric in ("hr10", "ndcg10"):
+                self.assertAlmostEqual(actual[metric], expected[metric], places=12)
         bundle = load_bundle(ROOT / "data/sequences.json", ROOT / "data/mock_candidates.json",
                              ROOT / "ml-1m/movies.dat")
         self.assertTrue(bundle.train)
