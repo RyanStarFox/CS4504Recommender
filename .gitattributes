@@ -1,0 +1,4 @@
+# Keep generated Phase-1 artifact checksums identical after checkout on Windows.
+data/sequences.json text eol=lf
+data/mock_candidates.json text eol=lf
+data/split_manifest.json text eol=lf

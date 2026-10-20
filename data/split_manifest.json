@@ -1,0 +1,46 @@
+{
+  "format_version": 1,
+  "split": "temporal",
+  "interaction_policy": "all ratings; no rating threshold",
+  "sort_order": [
+    "timestamp ascending",
+    "ratings.dat source row ascending"
+  ],
+  "holdout": "last=test; second last=validation; all earlier=train",
+  "history": {
+    "validation": "train",
+    "test": "train + validation"
+  },
+  "history_mask": "exclude all movies in the current history, before truncation",
+  "popularity": "train counts descending; movie ID ascending for ties",
+  "candidate_kind": "mock; not SASRec; no ground-truth injection or user filtering",
+  "candidate_k": 10,
+  "user_count": 6040,
+  "movie_count": 3883,
+  "user_tensor_rows": 6041,
+  "movie_tensor_rows": 3953,
+  "counts": {
+    "train": 988129,
+    "validation": 6040,
+    "test": 6040
+  },
+  "source_text_sha256_lf": {
+    "users.dat": "1dc3a95300cb19f7c10e027daf29b8cdf1d908dab65b5edfb45950aa389a10a3",
+    "movies.dat": "0140fc2356357c1a851d0f52e893a1e4d3696df632c4141cea8d5bc3d621f0b9",
+    "ratings.dat": "506d64ca44484487c11dc2d9a28de5c54948213e6b96285e298afe28d6ea4e0f"
+  },
+  "artifact_sha256": {
+    "sequences.json": "d6e8ce406e28d3358b048dc148686197797094b645c23acdc78afa90f5176dbe",
+    "mock_candidates.json": "44434fdcbd2a1f3fc5554dae266db03dfdb77ecea69e9202639edad5e44bb328"
+  },
+  "mock_debug_metrics": {
+    "validation": {
+      "hr10": 0.04271523178807947,
+      "ndcg10": 0.020597701220021504
+    },
+    "test": {
+      "hr10": 0.0369205298013245,
+      "ndcg10": 0.01803267346787488
+    }
+  }
+}
