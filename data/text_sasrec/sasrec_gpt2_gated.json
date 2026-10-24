@@ -1,0 +1,62 @@
+{
+  "model": "sasrec_gpt2_gated",
+  "encoder": "gpt2",
+  "experiment_config": {
+    "seed": 42,
+    "threads": 4,
+    "sequences": "data/sequences.json",
+    "movies": "ml-1m/movies.dat",
+    "features": {
+      "gpt2": "data/gpt2_movie_features.pt",
+      "qwen": "data/qwen_movie_features.pt"
+    },
+    "model": {
+      "rec_hidden_size": 64,
+      "max_seq_len": 50,
+      "num_blocks": 2,
+      "num_heads": 2,
+      "dropout": 0.2
+    },
+    "training": {
+      "epochs": 50,
+      "batch_size": 128,
+      "eval_batch_size": 256,
+      "learning_rate": 0.001,
+      "weight_decay": 0.0,
+      "patience": 5
+    },
+    "checkpoint_dir": "checkpoints",
+    "report_dir": "data/text_sasrec",
+    "results": "data/results.csv"
+  },
+  "model_config": {
+    "rec_hidden_size": 64,
+    "max_seq_len": 50,
+    "num_blocks": 2,
+    "num_heads": 2,
+    "dropout": 0.2,
+    "item_num": 3953
+  },
+  "feature_path": "data/gpt2_movie_features.pt",
+  "feature_sha256": "4ddce081653c10bc577e5785f2138467e123115152b61c354e42c74c6e214514",
+  "sequences_sha256": "d6e8ce406e28d3358b048dc148686197797094b645c23acdc78afa90f5176dbe",
+  "movies_sha256": "0140fc2356357c1a851d0f52e893a1e4d3696df632c4141cea8d5bc3d621f0b9",
+  "validation_metrics": {
+    "hr10": 0.12814569536423842,
+    "ndcg10": 0.06596495766187231
+  },
+  "test_metrics": {
+    "hr10": 0.11423841059602649,
+    "ndcg10": 0.059923444261898995
+  },
+  "selection": "validation NDCG@10; earliest best checkpoint",
+  "use_user_text": false,
+  "use_alignment": false,
+  "history_and_scoring_share_fusion": true,
+  "device": "cuda",
+  "dtype": "torch.float32",
+  "torch": "2.6.0+cu124",
+  "python": "3.10.20",
+  "checkpoint": "checkpoints/sasrec_gpt2_gated.pt",
+  "checkpoint_roundtrip_passed": true
+}

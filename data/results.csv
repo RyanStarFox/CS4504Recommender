@@ -3,3 +3,5 @@ popularity,0.03692053,0.01803267,temporal
 bpr_mf,0.06721854,0.03370051,temporal
 ncf_gpt2,0.52500839,0.12534397,random
 sasrec_id,0.12466887,0.06466999,temporal
+sasrec_gpt2_gated,0.11423841,0.05992344,temporal
+sasrec_qwen_gated,0.11539735,0.05944931,temporal

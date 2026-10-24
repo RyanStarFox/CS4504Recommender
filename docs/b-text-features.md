@@ -59,10 +59,10 @@ Qwen 使用 Transformers 的纯 PyTorch DeltaNet 实现，未安装额外融合�
 
 ## 与 D 的后续对接
 
-按 `docs/phase.md` 的 10/18 验收，本次已完成 GPT-2 池化、设备/dtype 策略、真实维度解析、两模型小批量验证、电影特征与生成配置。仍待 B/D 共同确认融合/损失接口；当前下面的约定是 B 的交付说明，不代表已取得 D 的确认。`fusion.py` 的实现、梯度和开关验证属于下一阶段。
+第一阶段已完成 GPT-2 池化、设备/dtype 策略、真实维度解析、两模型小批量验证、电影特征与生成配置。D 后续在 `docs/d-sasrec.md` 和 `sasrec.py` 交付了融合接口，第二阶段已按该接口实现；具体运行与验收见 [b-phase2.md](b-phase2.md)。
 
 D 按原始电影 ID 读取张量，并从 `features.shape[1]` 配置投影输入维度；推荐维度仍独立使用 `rec_hidden_size`。5a/5b 均只打开电影文本，`use_user_text=false`、`use_alignment=false`。第 6 行单独打开对齐。冻结缓存不进入优化器。
 
-第二阶段的 `fusion.py` 尚未在本次实现：需与 D 固定历史输入与候选打分是否共用融合表示、用户向量注入位置，再注册投影/门控为 SASRec 子模块。对齐仅接收去重有效电影 ID 的原始 ID 表示与投影文本表示，排除 padding 和空缺 ID，温度与损失权重显式配置。
+历史输入与候选打分已固定共用 `fusion_module.fuse_items`，投影与门控注册为 SASRec 子模块。当前不启用用户向量。对齐函数接收原始 ID 表示与投影文本表示，排除 padding、空缺和重复 ID；其温度与正式训练权重由第 6 行实验显式配置。
 
 模型配置及文本类依据：[官方 Qwen checkpoint](https://huggingface.co/Qwen/Qwen3.5-0.8B)、[Transformers Qwen3.5 文档](https://huggingface.co/docs/transformers/model_doc/qwen3_5)。

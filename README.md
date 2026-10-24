@@ -93,3 +93,5 @@ python main.py --features data/gpt2_movie_features.pt --epochs 3
 - **BPR 损失**：推动正样本分数高于负样本分数。
 - **HR@K**：前 K 个推荐中是否命中真实交互电影。
 - **NDCG@K**：同时考虑命中情况和命中位置，位置越靠前贡献越大。
+
+B 的第二阶段门控融合、5a/5b 配置与实验结果见 [b-phase2.md](docs/b-phase2.md)。
