@@ -10,12 +10,14 @@ import torch
 from torch import nn
 
 from ranking.batching import collate
-from ranking.data import dpo_pairs, held_out, load_bundle, load_sample_file, write_json
+from ranking.data import dpo_pairs, held_out, load_bundle, load_eval_examples, load_sample_file, write_json
+from ranking.evaluate import rankings_from_completions, write_result
 from ranking.lora import LoRALinear, apply_lora, lora_fingerprint
-from ranking.objective import dpo_loss, grpo_loss, sft_loss
+from ranking.objective import dpo_loss, grpo_loss, grpo_terms, sft_loss
 from ranking.prompts import assert_non_thinking, place_first, ranking_text, user_prompt
 from ranking.reward import group_advantages, hr_at_k, ndcg_at_k, parse_ranking
-from ranking.sample import llama_completion
+from ranking.export import lora_deltas
+from ranking.sample import llama_completion, llama_generation
 from ranking.train import _write_fixture
 
 
@@ -178,14 +180,90 @@ class RankingContractTest(unittest.TestCase):
         self.assertTrue(held_out("7", 1, seed=1))
         self.assertEqual(held_out("7", 0.5, seed=3), held_out("7", 0.5, seed=3))
 
+    def test_lora_delta_uses_the_language_model_checkpoint_key(self):
+        factor_a = torch.tensor([[1.0, 0.0], [0.0, 1.0]])
+        factor_b = torch.tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
+        state = {
+            "model.layers.0.mlp.gate_proj.lora_A": factor_a,
+            "model.layers.0.mlp.gate_proj.lora_B": factor_b,
+        }
+        deltas = lora_deltas(state, alpha=4, rank=2)
+        key = "model.language_model.layers.0.mlp.gate_proj.weight"
+        self.assertEqual(set(deltas), {key})
+        self.assertTrue(torch.equal(deltas[key], 2 * (factor_b @ factor_a)))
+
     def test_llama_backend_reports_a_missing_binary_and_strips_the_prompt(self):
         with self.assertRaises(FileNotFoundError):
             llama_completion("llama-cli-missing", "model.gguf", "prompt", 8, 0.8, 128)
         with tempfile.TemporaryDirectory() as directory:
             binary = Path(directory) / "llama-cli"
-            binary.write_text("#!/bin/sh\nprintf '%s' \"prompt 4 5\"\n", encoding="utf-8")
+            binary.write_text(
+                "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$(dirname \"$0\")/args\"\nprintf '%s' \"prompt 4 5\"\n",
+                encoding="utf-8")
             binary.chmod(binary.stat().st_mode | stat.S_IEXEC)
             self.assertEqual(llama_completion(binary, "model.gguf", "prompt", 8, 0.8, 128), "4 5")
+            binary.write_text(
+                "#!/bin/sh\nprintf 'prompt \\357\\277' \n",
+                encoding="utf-8")
+            self.assertEqual(llama_completion(binary, "model.gguf", "prompt", 8, 0.8, 128), "\ufffd")
+            arguments = (Path(directory) / "args").read_text(encoding="utf-8")
+            self.assertIn("--no-jinja", arguments)
+            self.assertIn("--no-escape", arguments)
+            self.assertIn("\n-f\n", arguments)
+
+    def test_target_logprobs_match_log_softmax_and_grpo_splits(self):
+        logits = torch.tensor([
+            [[1.0, 2.0, 0.5], [0.0, -1.0, 3.0]],
+            [[0.2, 0.2, 0.2], [4.0, 0.0, 1.0]],
+        ])
+        targets = torch.tensor([[1, 2], [0, 0]])
+        expected = torch.log_softmax(logits, dim=-1).gather(-1, targets.unsqueeze(-1)).squeeze(-1)
+        from ranking.objective import _target_logprobs
+        self.assertTrue(torch.allclose(_target_logprobs(logits, targets), expected))
+        policy = torch.tensor([[-0.2, -0.4, 0.0], [-1.0, -0.5, 0.0]])
+        reference = torch.tensor([[-0.3, -0.3, 0.0], [-0.7, -0.7, 0.0]])
+        mask = torch.tensor([[1, 1, 0], [1, 0, 0]], dtype=torch.bool)
+        advantages = torch.tensor([0.4, -0.4])
+        whole = grpo_loss(policy, reference, mask, advantages, beta=0.04)
+        denom = mask.sum()
+        parts = [
+            grpo_terms(policy[index:index + 1], reference[index:index + 1], mask[index:index + 1],
+                       advantages[index:index + 1], 0.04, denom)
+            for index in range(2)
+        ]
+        self.assertTrue(torch.allclose(whole, parts[0] + parts[1]))
+
+    def test_eval_keeps_misses_and_appends_the_validation_movie(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            _write_raw(root)
+            _, examples = load_eval_examples(
+                root / "sequences.json", root / "candidates.json", root / "movies.dat", "test",
+                max_history=10, candidate_k=3)
+            by_user = {row.user_id: row for row in examples}
+            self.assertEqual(set(by_user), {"1", "2"})
+            self.assertEqual(by_user["1"].history, (1, 2, 3, 4))
+            self.assertEqual(by_user["2"].ground_truth, 4)
+            self.assertNotIn(4, by_user["2"].candidates)
+            metrics = rankings_from_completions(
+                examples, ["5 1 2", "none"])
+            self.assertEqual(metrics["hr10"], 0.5)
+            self.assertAlmostEqual(metrics["ndcg10"], 0.5)
+            results = root / "results.csv"
+            results.write_text("model,hr10,ndcg10,split\npopularity,0.1,0.2,temporal\n", encoding="utf-8")
+            write_result(results, "qwen_sft", metrics, "temporal")
+            write_result(results, "qwen_sft", metrics, "temporal")
+            lines = results.read_text(encoding="utf-8").strip().splitlines()
+            self.assertEqual(len(lines), 3)
+            self.assertIn("qwen_sft,0.50000000,0.50000000,temporal", lines)
+
+    def test_llama_generation_keeps_the_ranking_line(self):
+        transcript = (
+            "Loading model...\n\nbuild      : b11669\n> prompt\n</think>\n\n"
+            "1586 1544 786\n\n[ Prompt: 2710.7 t/s | Generation: 63.3 t/s ]\n\nExiting...\n"
+        )
+        self.assertEqual(llama_generation(transcript), "1586 1544 786")
+        self.assertEqual(llama_generation("</think>\n\n[ Prompt: 1.0 t/s | Generation: 1.0 t/s ]\n"), "none")
 
 
 def _example():
