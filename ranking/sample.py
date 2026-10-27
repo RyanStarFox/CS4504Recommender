@@ -5,6 +5,7 @@
 """
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 from ranking.batching import render_prompt
@@ -81,6 +82,11 @@ def sample_examples(model, tokenizer, examples, titles, group_size, max_new_toke
 
 
 def llama_completion(binary, model_path, prompt, max_tokens, temperature, context):
+    """Sample one completion. The prompt is already a closed non-thinking chat string.
+
+    Jinja stays off so llama.cpp does not wrap that string in a second template.
+    top-k and min-p are disabled; top-p 0.9 matches the Hugging Face stand-in.
+    """
     binary_path = binary if Path(binary).is_file() else shutil.which(binary)
     if binary_path is None:
         raise FileNotFoundError(
@@ -88,24 +94,60 @@ def llama_completion(binary, model_path, prompt, max_tokens, temperature, contex
             "Rows 7-9 report generations from llama.cpp after the LoRA is merged and converted to GGUF. "
             "The hf backend only exercises the training loop."
         )
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False) as handle:
+        handle.write(prompt)
+        prompt_file = handle.name
     command = [
-        binary_path, "-m", str(model_path), "-p", prompt, "-n", str(max_tokens),
-        "--temp", str(temperature), "-c", str(context), "--no-display-prompt",
+        binary_path, "-m", str(model_path), "-f", prompt_file, "--no-escape",
+        "--no-jinja", "--simple-io", "--log-disable", "--no-display-prompt",
+        "--single-turn", "--reasoning", "off",
+        "-n", str(max_tokens), "--temp", str(temperature),
+        "--top-k", "0", "--top-p", "0.9", "--min-p", "0", "--repeat-penalty", "1",
+        "-c", str(context), "-ngl", "all", "--fit", "off", "-s", "-1",
     ]
-    completed = subprocess.run(command, check=True, capture_output=True, text=True)
-    text = completed.stdout
+    try:
+        completed = subprocess.run(command, check=False, capture_output=True)
+    finally:
+        Path(prompt_file).unlink(missing_ok=True)
+    if completed.returncode != 0:
+        detail = completed.stderr.decode("utf-8", errors="replace").strip()
+        raise RuntimeError(f"llama.cpp exited {completed.returncode}: {detail}")
+    text = completed.stdout.decode("utf-8", errors="replace")
     if text.startswith(prompt):
         text = text[len(prompt):]
-    text = text.strip()
-    if not text:
+    text = llama_generation(text)
+    if not text.strip():
         raise RuntimeError("llama.cpp returned an empty completion")
     return text
+
+
+def llama_generation(transcript):
+    """Drop the llama-cli banner, echoed prompt and timing line.
+
+    The ranking itself is the last line before ``[ Prompt: ... t/s ]``.
+    An empty generation becomes ``none`` so the sample file still has text
+    and the training sequence stays a few tokens long.
+    """
+    text = transcript
+    marker = "[ Prompt:"
+    if marker in text:
+        text = text[:text.rfind(marker)]
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    while lines and lines[-1] in {"</think>", "Exiting..."}:
+        lines.pop()
+    if not lines:
+        return "none"
+    last = lines[-1]
+    if last.startswith("Loading model") or last.startswith("build "):
+        return "none"
+    return last
 
 
 def sample_llama(examples, titles, tokenizer, binary, model_path, group_size,
                  max_new_tokens, temperature, context):
     groups = []
-    for example in examples:
+    total = len(examples)
+    for index, example in enumerate(examples, start=1):
         prompt = render_prompt(tokenizer, user_prompt(example, titles))
         completions = [
             llama_completion(binary, model_path, prompt, max_new_tokens, temperature, context)
@@ -113,4 +155,6 @@ def sample_llama(examples, titles, tokenizer, binary, model_path, group_size,
         ]
         groups.append(build_group(
             example.user_id, prompt, example.ground_truth, example.candidates, completions))
+        if index == 1 or index % 25 == 0 or index == total:
+            print(f"llama sample {index}/{total}", flush=True)
     return groups

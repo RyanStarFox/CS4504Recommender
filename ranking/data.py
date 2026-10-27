@@ -155,6 +155,50 @@ def load_bundle(sequences_path, candidates_path, movies_path, candidate_k=10,
     )
 
 
+def load_eval_examples(sequences_path, candidates_path, movies_path, split, max_history=10,
+                       candidate_k=10):
+    """Every user in one candidate split, including ground truths outside the Top-10.
+
+    Validation history is the training prefix. Test history appends the
+    validation movie, matching the history SASRec used to build that list.
+    """
+    if split not in {"validation", "test"}:
+        raise ValueError("split must be validation or test")
+    if max_history <= 0:
+        raise ValueError("max_history must be positive")
+    titles = read_movies(movies_path)
+    sequences = _load_json(sequences_path)
+    candidates = _load_json(candidates_path)
+    rows = candidates.get(split) if isinstance(candidates, dict) else None
+    if not isinstance(rows, dict) or not rows:
+        raise ValueError(f"{candidates_path} {split} must be a non-empty object")
+    examples = []
+    for user_id in sorted(rows, key=lambda value: int(value)):
+        user_id = str(user_id)
+        record = sequences.get(user_id)
+        if not isinstance(record, dict) or not {"train", "validation", "test"} <= set(record):
+            raise ValueError(f"User {user_id} in {sequences_path} needs train, validation and test")
+        history = _movie_list(record["train"], sequences_path, f"{user_id}.train")
+        if split == "test":
+            history = history + (int(record["validation"]),)
+        label = record[split]
+        if isinstance(label, bool) or not isinstance(label, int) or label <= 0:
+            raise ValueError(f"User {user_id} {split} label must be a positive movie id")
+        options = _movie_list(rows[user_id], candidates_path, f"{split}.{user_id}")
+        if candidate_k is not None and len(options) != candidate_k:
+            raise ValueError(
+                f"User {user_id} {split} candidates have length {len(options)}, expected {candidate_k}"
+            )
+        unknown = [movie_id for movie_id in history + options + (label,) if movie_id not in titles]
+        if unknown:
+            raise ValueError(f"User {user_id} refers to unknown movie ids {unknown[:5]}")
+        examples.append(Example(
+            user_id=user_id, split=split, history=history[-max_history:],
+            candidates=options, ground_truth=label,
+        ))
+    return titles, tuple(examples)
+
+
 def dpo_pairs(examples, max_rejected=1):
     """chosen is the ground-truth movie; rejected is another movie in the same list."""
     if max_rejected <= 0:
