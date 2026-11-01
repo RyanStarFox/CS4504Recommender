@@ -1,4 +1,4 @@
-"""B's 5a/5b experiments using D's unchanged SASRec training/evaluation loop."""
+"""B's 5a/5b/6 experiments sharing D's SASRec data and evaluation protocol."""
 
 import argparse
 import hashlib
@@ -74,21 +74,41 @@ def run(config, encoder):
     data = SASRecTrainingDataset(
         sequences, movie_ids, model.max_seq_len, config["seed"]
     )
-    model_name = f"sasrec_{encoder}_gated"
+    alignment = config.get("alignment", {})
+    use_alignment = alignment.get("enabled", False)
+    if use_alignment and encoder != "qwen":
+        raise ValueError("Row 6 alignment uses the Qwen encoder")
+    model_name = (
+        f"sasrec_{encoder}_aligned" if use_alignment else f"sasrec_{encoder}_gated"
+    )
     print(
         f"{model_name}: {device}, {len(sequences)} users; text={features.shape[1]}; "
-        "use_user_text=false, use_alignment=false",
+        f"use_user_text=false, use_alignment={str(use_alignment).lower()}",
         flush=True,
     )
-    validation, test = train_model(
-        model,
-        data,
-        sequences,
-        movie_ids,
-        device,
-        seed=config["seed"],
-        **config["training"],
-    )
+    training_args = dict(seed=config["seed"], **config["training"])
+    trace = {}
+    if use_alignment:
+        from text_training import train_aligned
+
+        validation, test, trace = train_aligned(
+            model,
+            data,
+            sequences,
+            movie_ids,
+            device,
+            alignment=alignment,
+            **training_args,
+        )
+    else:
+        validation, test = train_model(
+            model,
+            data,
+            sequences,
+            movie_ids,
+            device,
+            **training_args,
+        )
     checkpoint = Path(config["checkpoint_dir"]) / f"{model_name}.pt"
     checkpoint.parent.mkdir(parents=True, exist_ok=True)
     report = {
@@ -104,7 +124,7 @@ def run(config, encoder):
         "test_metrics": test,
         "selection": "validation NDCG@10; earliest best checkpoint",
         "use_user_text": False,
-        "use_alignment": False,
+        "use_alignment": use_alignment,
         "history_and_scoring_share_fusion": True,
         "device": str(device),
         "dtype": "torch.float32",
@@ -112,6 +132,8 @@ def run(config, encoder):
         "python": platform.python_version(),
         "checkpoint": str(checkpoint),
     }
+    if trace:
+        report["training_trace"] = trace
     torch.save(dict(report, model_state=model.state_dict()), checkpoint)
     # Recreate from external frozen cache; checkpoints must contain all learned
     # fusion parameters, but must not contain the frozen feature tensors.

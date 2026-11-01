@@ -8,3 +8,4 @@ sasrec_qwen_gated,0.11539735,0.05944931,temporal
 qwen_sft,0.12466887,0.06362731,temporal
 qwen_dpo,0.12466887,0.06457566,temporal
 qwen_grpo,0.12466887,0.06506303,temporal
+sasrec_qwen_aligned,0.11605960,0.06006520,temporal
