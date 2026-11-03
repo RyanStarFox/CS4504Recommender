@@ -22,11 +22,11 @@ SASRec、验证/测试全量排序、HR@10 / NDCG@10、检查点及正式 Top-10
 
 ## 运行
 
-按项目统一环境建立 `.venv` 后执行：
+在项目统一的 `CS4504` conda 环境中执行：
 
 ```bash
-.venv/bin/python -m unittest discover -s tests -v
-.venv/bin/python run_sasrec.py --device auto
+conda run -n CS4504 python -m unittest discover -s tests -v
+conda run -n CS4504 python run_sasrec.py --device auto
 ```
 
 默认产物为：
@@ -56,5 +56,36 @@ fuse_users(sequence_states, user_vectors) -> fused_sequence_states  # 仅可选 
 
 合成数据测试覆盖因果掩码、左侧 padding、负采样、历史屏蔽、候选 JSON、冻结
 特征及融合梯度，并实际完成一轮训练。B 已交付的 GPT-2 `[3953, 768]` 与 Qwen
-`[3953, 1024]` 特征也已分别通过融合前向与梯度检查。正式训练仍需等待 A 的
-`data/sequences.json`。
+`[3953, 1024]` 特征也已分别通过融合前向与梯度检查。正式训练与候选导出已经
+使用 A 的 `data/sequences.json` 完成。
+
+## Agent 演示
+
+`agent_demo.py` 完成“观看历史 → 自然语言偏好 → 类型过滤 → SASRec 召回 → Qwen
+重排 → 最终推荐 → 留出项命中检查”的演示流程。观看历史默认展示最近 10 部，可用
+`--history-limit` 调整。留出的真实下一部观看只用于演示 Top-K 是否命中，不会输入
+模型；单用户案例不替代全测试集 HR@10 / NDCG@10。默认从 README 指向的 Hugging
+Face 仓库下载 GRPO LoRA，
+校验它与项目固定的 Qwen 基座修订一致，再通过 `ranking/lora.py` 加载并以非思考
+模式确定性生成排序。基座与 adapter 都保存在被 Git 忽略的 `models/` 下：
+
+```bash
+conda run -n CS4504 python agent_demo.py \
+  --user-id 2 --request "我不喜欢恐怖片"
+```
+
+正式展示时加 `--require-reranker`，保证下载或生成失败时直接报错而不降级。也可以
+用 `--reranker-stage sft|dpo|grpo` 显式选择 README 中的三份 LoRA：
+
+```bash
+conda run -n CS4504 python agent_demo.py \
+  --user-id 2 --request "我不喜欢恐怖片" \
+  --reranker-stage grpo --require-reranker
+```
+
+类型过滤发生在 SASRec 候选打分之前，历史电影仍会单独屏蔽。Qwen 路径复用 C 的
+非思考 chat template 和排序解析；若模型漏掉或重复编号，解析器会保留有效顺序并
+用原 SASRec 顺序补齐，最终始终是同一 Top-10 的完整排列。需要部署版时仍可使用
+`--reranker-backend llama --gguf ... --tokenizer ... --llama-bin ...` 调用 C 的
+llama.cpp 路径。离线且没有缓存权重时，默认命令会明确说明原因并保留 SASRec 顺序；
+也可用 `--reranker-backend none` 主动关闭重排。

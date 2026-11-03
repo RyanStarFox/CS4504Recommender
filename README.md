@@ -22,6 +22,7 @@
 | `recommender.py` | GPT-2 + NCF 混合推荐模型 |
 | `trainer.py` | 已完成的训练与评测代码，请勿修改评测部分 |
 | `main.py` | 项目运行入口 |
+| `agent_demo.py` | 类型过滤、SASRec 召回与 Qwen LoRA 重排演示 |
 
 ## 3. 需要完成的四处代码
 
@@ -96,3 +97,20 @@ python main.py --features data/gpt2_movie_features.pt --epochs 3
 
 B 的第二阶段门控融合、5a/5b 配置与实验结果见 [b-phase2.md](docs/b-phase2.md)。
 B 的第 6 行对齐消融、图表和汇报材料见 [b-phase3.md](docs/b-phase3.md)。
+
+## 8. Agent 演示
+
+默认使用上面 Hugging Face 仓库中的 GRPO LoRA；首次运行会下载固定修订的 adapter
+与 Qwen 基座，后续复用本地缓存：
+
+```bash
+conda run -n CS4504 CUDA_VISIBLE_DEVICES=1 python agent_demo.py \
+  --user-id 2 --request "我不喜欢恐怖片" --require-reranker
+```
+
+流程会先展示用户最近 10 部已观看电影，再在电影全集中排除 Horror，用用户时间
+历史做 SASRec Top-10 召回，最后用非思考模式的 Qwen 重排同一批候选。结尾还会
+展示时间切分中留出的真实下一部观看及 Top-K 是否命中；这是单用户案例，整体准确率
+仍以 HR@10 / NDCG@10 为准。可用 `--history-limit` 调整历史展示数量，并通过
+`--reranker-stage sft|dpo|grpo` 选择 README 所述三份 LoRA；演示实现与完整参数见
+[D 的交付说明](docs/d-sasrec.md)。
