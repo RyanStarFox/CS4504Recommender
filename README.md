@@ -44,7 +44,7 @@ pip install -r requirements.txt
 
 PyTorch 的安装方式与电脑是否具有 NVIDIA GPU 有关，可参考课程统一环境或 PyTorch 官方安装命令。代码会自动选择 CUDA 或 CPU。
 
-全组依赖统一在 `requirements.txt`，特征入口按 CUDA > MPS > CPU 选择设备。项目内虚拟环境统一使用 `.venv`。GPT-2 放在 `models/gpt2/`，Qwen 放在 `models/Qwen3.5-0.8B/`；整个 `models/` 目录不进入 Git，模型文件需在本机另行准备。最新分阶段计划见 [phase.md](docs/phase.md)，特征复现与验收见 [b-text-features.md](docs/b-text-features.md)。
+全组依赖统一在 `requirements.txt`，特征入口按 CUDA > MPS > CPU 选择设备。项目内虚拟环境统一使用 `.venv`。GPT-2 放在 `models/gpt2/`，Qwen 放在 `models/Qwen3.5-0.8B/`；整个 `models/` 目录不进入 Git，模型文件需在本机另行准备。第 7–9 行的三份重排 LoRA（SFT、DPO、GRPO）在 [RyanFoxW/cs4504-qwen35-movielens-rerank](https://huggingface.co/RyanFoxW/cs4504-qwen35-movielens-rerank)，用 `ranking/lora.py` 加载，基座权重不在该仓库里重复上传。最新分阶段计划见 [phase.md](docs/phase.md)，特征复现与验收见 [b-text-features.md](docs/b-text-features.md)。
 
 ## 5. 运行步骤
 
